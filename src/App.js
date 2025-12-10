@@ -126,14 +126,14 @@ const Card = ({
         className={`
         relative w-20 h-32 md:w-28 md:h-44 rounded-xl shadow-2xl transition-all duration-500
         border-2 border-white/10 bg-[#1a1a2e] flex items-center justify-center overflow-hidden
-        ${isSelected ? "transform -translate-y-4 shadow-yellow-500/30" : ""}
+        ${isSelected ? "transform -translate-y-4 shadow-white/50" : ""}
       `}
       >
         <div className="absolute inset-2 border border-white/5 rounded-lg opacity-50 bg-[radial-gradient(circle,_var(--tw-gradient-stops))] from-indigo-900/40 to-transparent"></div>
         {isLocked ? (
           <div className="flex flex-col items-center gap-2 animate-pulse">
-            <Lock className="text-yellow-500" size={32} />
-            <span className="text-[10px] text-yellow-500/70 font-bold uppercase tracking-widest">
+            <Lock className="text-white" size={32} />
+            <span className="text-[10px] text-white/70 font-bold uppercase tracking-widest">
               Locked
             </span>
           </div>
@@ -149,7 +149,7 @@ const Card = ({
       onClick={onClick}
       disabled={disabled}
       className={`
-        relative w-20 h-32 md:w-28 md:h-44 rounded-xl shadow-xl transition-all duration-300 transform
+        relative w-20 h-32 md:w-28 md:h-44 rounded-xl shadow-xl transition-all duration-300transform
         flex flex-col items-center justify-between p-2 select-none border-2
         ${styles[type] || styles.C}
         ${
@@ -192,6 +192,7 @@ const QUICK_CHATS = [
   "🤔 你在猶豫什麼？",
   "🔪 同歸於盡！",
   "👋 快點出牌",
+  "🍻 來杯啤酒吧",
 ];
 
 // ------------------------------------------------------------------
@@ -240,9 +241,9 @@ const EmperorGame = () => {
 
       if (playerRole === "emperor" || playerRole === "slave") {
         const myPresenceRef = ref(db, `rooms/${roomId}/players/${playerRole}`);
-        onDisconnect(myPresenceRef).set(false);
-        onDisconnect(ref(db, `rooms/${roomId}/status`)).set("aborted");
-        onDisconnect(ref(db, `rooms/${roomId}/moves/${playerRole}`)).remove();
+        //onDisconnect(myPresenceRef).set(false);
+        //onDisconnect(ref(db, `rooms/${roomId}/status`)).set("aborted");
+        //onDisconnect(ref(db, `rooms/${roomId}/moves/${playerRole}`)).remove();
       } else if (playerRole === "spectator" && spectatorId) {
         const specRef = ref(db, `rooms/${roomId}/spectators/${spectatorId}`);
         onDisconnect(specRef).remove();
@@ -871,7 +872,7 @@ const EmperorGame = () => {
               {isResolving && !gameState.winner && (
                 <div className="absolute top-0 w-full max-w-xs flex flex-col items-center gap-1 z-50">
                   <div className="text-yellow-400 text-xs font-bold flex items-center gap-1 animate-pulse">
-                    <Hourglass size={12} /> 結算中，請稍候...
+                    <Hourglass size={12} /> 下一回合準備中，請稍候...
                   </div>
                   <div className="w-full h-1 bg-white/10 rounded-full overflow-hidden">
                     <div
