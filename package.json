@@ -4,6 +4,9 @@
   "description": "",
   "keywords": [],
   "main": "src/index.tsx",
+  "engines": {
+    "node": "18.x"
+  },
   "dependencies": {
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
@@ -19,7 +22,7 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build",
+    "build": "CI=false react-scripts build",
     "test": "react-scripts test --env=jsdom",
     "eject": "react-scripts eject"
   },
