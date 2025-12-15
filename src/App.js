@@ -28,10 +28,11 @@ import {
   Swords,
   Lock,
   Hourglass,
+  MonitorPlay,
 } from "lucide-react";
 
 // ------------------------------------------------------------------
-// ⚠️ Firebase Config
+// ⚠️ Firebase Config (保持不變)
 // ------------------------------------------------------------------
 const firebaseConfig = {
   apiKey: "AIzaSyBe1_b5RhoodzWXUMI9CCMqyv16b_zMPxQ",
@@ -215,6 +216,9 @@ const EmperorGame = () => {
   const [animPhase, setAnimPhase] = useState("idle");
   const isLeavingRef = useRef(false);
 
+  // 用於控制觀戰者名單的顯示 (Mobile click toggle)
+  const [showSpectatorList, setShowSpectatorList] = useState(false);
+
   useEffect(() => {
     if (roomId && playerRole) {
       const roomRef = ref(db, `rooms/${roomId}`);
@@ -242,8 +246,6 @@ const EmperorGame = () => {
       if (playerRole === "emperor" || playerRole === "slave") {
         const myPresenceRef = ref(db, `rooms/${roomId}/players/${playerRole}`);
         //onDisconnect(myPresenceRef).set(false);
-        //onDisconnect(ref(db, `rooms/${roomId}/status`)).set("aborted");
-        //onDisconnect(ref(db, `rooms/${roomId}/moves/${playerRole}`)).remove();
       } else if (playerRole === "spectator" && spectatorId) {
         const specRef = ref(db, `rooms/${roomId}/spectators/${spectatorId}`);
         onDisconnect(specRef).remove();
@@ -352,7 +354,8 @@ const EmperorGame = () => {
     setLoading(false);
   };
 
-  const joinRoom = async () => {
+  // 🔥 改動 1: 加入為玩家 (奴隸方)
+  const joinAsPlayer = async () => {
     if (!nickname) return setError("請先輸入暱稱");
     if (!inputRoomId) return setError("請輸入房號");
     setLoading(true);
@@ -361,7 +364,7 @@ const EmperorGame = () => {
       const snapshot = await get(roomRef);
       if (snapshot.exists()) {
         const data = snapshot.val();
-
+        // 只有在等待中且沒有 Slave 時才能加入
         if (data.status === "waiting" && !data.players.slave) {
           await update(roomRef, {
             playerName: nickname,
@@ -370,15 +373,34 @@ const EmperorGame = () => {
           setRoomId(inputRoomId);
           setPlayerRole("slave");
         } else {
-          const newSpectatorId = Date.now().toString();
-          await set(
-            ref(db, `rooms/${inputRoomId}/spectators/${newSpectatorId}`),
-            nickname
-          );
-          setRoomId(inputRoomId);
-          setPlayerRole("spectator");
-          setSpectatorId(newSpectatorId);
+          setError("房間已滿或遊戲已開始，請改用觀戰模式");
         }
+      } else {
+        setError("找不到房間");
+      }
+    } catch (e) {
+      setError("加入失敗: " + e.message);
+    }
+    setLoading(false);
+  };
+
+  // 🔥 改動 2: 加入為觀戰者 (獨立邏輯)
+  const joinAsSpectator = async () => {
+    if (!nickname) return setError("請先輸入暱稱");
+    if (!inputRoomId) return setError("請輸入房號");
+    setLoading(true);
+    const roomRef = ref(db, `rooms/${inputRoomId}`);
+    try {
+      const snapshot = await get(roomRef);
+      if (snapshot.exists()) {
+        const newSpectatorId = Date.now().toString();
+        await set(
+          ref(db, `rooms/${inputRoomId}/spectators/${newSpectatorId}`),
+          nickname
+        );
+        setRoomId(inputRoomId);
+        setPlayerRole("spectator");
+        setSpectatorId(newSpectatorId);
       } else {
         setError("找不到房間");
       }
@@ -546,8 +568,6 @@ const EmperorGame = () => {
           status: "gameover",
         });
       } else {
-        // 🔥 關鍵修正：進入下一回合時，把選牌資料 (empSelection/slvSelection) 明確設為 null
-        // 這樣伺服器上的舊資料會被物理刪除，客戶端就不會收到「上一局的牌」了
         await update(ref(db, `rooms/${roomId}`), {
           empSelection: null,
           slvSelection: null,
@@ -597,7 +617,7 @@ const EmperorGame = () => {
   // ------------------------------------------------------------------
 
   if (!gameState) {
-    // ... (登入畫面保持不變)
+    // 🔥 改動 3: 登入畫面 - 將加入按鈕分成「對戰」與「觀戰」
     return (
       <div className="min-h-screen bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-slate-800 via-slate-900 to-black text-white flex items-center justify-center p-4">
         <div className="max-w-md w-full backdrop-blur-md bg-white/5 border border-white/10 p-8 rounded-3xl shadow-2xl relative overflow-hidden">
@@ -648,13 +668,22 @@ const EmperorGame = () => {
                 onChange={(e) => setInputRoomId(e.target.value)}
                 className="w-full bg-black/30 border border-white/10 rounded-xl px-4 py-3 text-center text-lg tracking-widest text-white focus:ring-2 focus:ring-yellow-500/50 outline-none transition placeholder-white/20"
               />
-              <button
-                onClick={joinRoom}
-                disabled={loading || !inputRoomId || !nickname}
-                className="w-full py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
-              >
-                <User size={20} /> 加入房間 / 觀戰
-              </button>
+              <div className="flex gap-2">
+                <button
+                  onClick={joinAsPlayer}
+                  disabled={loading || !inputRoomId || !nickname}
+                  className="flex-1 py-4 bg-slate-700 hover:bg-slate-600 text-white font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer border border-white/10"
+                >
+                  <Swords size={20} /> 挑戰 (玩家)
+                </button>
+                <button
+                  onClick={joinAsSpectator}
+                  disabled={loading || !inputRoomId || !nickname}
+                  className="flex-1 py-4 bg-slate-800 hover:bg-slate-700 text-purple-300 font-bold rounded-xl transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer border border-white/10 hover:border-purple-500/30"
+                >
+                  <Eye size={20} /> 觀戰
+                </button>
+              </div>
             </div>
             {error && (
               <p className="text-red-400 text-center text-xs mt-2 bg-red-900/20 py-2 rounded-lg border border-red-500/20 animate-pulse">
@@ -702,8 +731,17 @@ const EmperorGame = () => {
             </div>
           </div>
           {spectators.length > 0 && (
-            <div className="mb-4 text-xs text-gray-400">
-              觀戰者: {spectators.join(", ")}
+            <div className="mb-4 text-sm text-gray-400 bg-black/20 p-2 rounded-xl">
+              <div className="text-xs uppercase tracking-widest mb-1 opacity-50">
+                Spectators
+              </div>
+              <div className="flex flex-wrap justify-center gap-2">
+                {spectators.map((name, i) => (
+                  <span key={i} className="text-purple-300">
+                    {name}
+                  </span>
+                ))}
+              </div>
             </div>
           )}
           {isHost ? (
@@ -715,7 +753,11 @@ const EmperorGame = () => {
               開始對戰
             </button>
           ) : (
-            <div className="text-yellow-500 animate-pulse">等待開始...</div>
+            <div className="text-yellow-500 animate-pulse">
+              {playerRole === "spectator"
+                ? "等待關主開始遊戲..."
+                : "等待開始..."}
+            </div>
           )}
         </div>
       </div>
@@ -755,9 +797,6 @@ const EmperorGame = () => {
   const isClash = animPhase === "clash" || animPhase === "return";
   const isReturn = animPhase === "return";
 
-  // 🔥 新增：判定是否為「真正的」開牌時間
-  // 必須同時滿足：1. 有回合結果 (showdown)  2. 正在播放戰鬥動畫 (clash/return)
-  // 如果不滿足這兩個條件，就算 serverOppSel 有殘留值，也不顯示！
   const isShowdownMoment =
     !!gameState.roundResult &&
     (animPhase === "clash" || animPhase === "return");
@@ -776,7 +815,8 @@ const EmperorGame = () => {
         gameState.roundResult?.sWin === true;
 
   const showBattle = gameState.status !== "gameover";
-  const spectatorCount = getSpectatorsList().length;
+  const spectatorList = getSpectatorsList();
+  const spectatorCount = spectatorList.length;
   const canShowCard = !!gameState.roundResult || !!gameState.winner;
 
   return (
@@ -801,16 +841,49 @@ const EmperorGame = () => {
       `}</style>
 
       {/* Header */}
-      <header className="flex justify-between items-center p-4 border-b border-white/5 bg-black/20 backdrop-blur-sm z-50">
+      <header className="flex justify-between items-center p-4 border-b border-white/5 bg-black/20 backdrop-blur-sm z-50 relative">
         <div className="flex items-center gap-2 text-yellow-500/80 font-bold">
           <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
           <span>ROOM {roomId}</span>
         </div>
+
+        {/* 🔥 改動 4: 觀戰者列表顯示區域 (不擁擠設計) */}
         {spectatorCount > 0 && (
-          <div className="flex items-center gap-2 px-3 py-1 bg-white/5 rounded-full text-xs text-gray-400">
-            <Eye size={12} /> {spectatorCount}
+          <div className="relative group">
+            <button
+              onClick={() => setShowSpectatorList(!showSpectatorList)}
+              className="flex items-center gap-2 px-3 py-1 bg-white/5 hover:bg-white/10 rounded-full text-xs text-purple-300 border border-purple-500/20 transition cursor-pointer"
+            >
+              <Eye size={12} /> 觀戰: {spectatorCount}
+            </button>
+            {/* Hover 或 Click 顯示名單 */}
+            <div
+              className={`absolute top-full right-0 mt-2 w-48 bg-slate-800 border border-white/10 rounded-xl shadow-xl p-3 z-[100] transition-all duration-200 origin-top-right
+                ${
+                  showSpectatorList
+                    ? "opacity-100 scale-100 visible"
+                    : "opacity-0 scale-95 invisible group-hover:opacity-100 group-hover:scale-100 group-hover:visible"
+                }
+              `}
+            >
+              <div className="text-[10px] text-gray-500 uppercase tracking-widest mb-2 border-b border-white/5 pb-1">
+                目前觀眾
+              </div>
+              <div className="max-h-40 overflow-y-auto no-scrollbar space-y-1">
+                {spectatorList.map((name, i) => (
+                  <div
+                    key={i}
+                    className="text-xs text-gray-300 flex items-center gap-2"
+                  >
+                    <div className="w-1.5 h-1.5 bg-purple-500 rounded-full"></div>
+                    {name}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         )}
+
         <div className="flex items-center gap-4">
           <div
             className={`px-3 py-1 rounded-full text-xs font-bold border flex items-center gap-2 ${
@@ -822,13 +895,13 @@ const EmperorGame = () => {
             }`}
           >
             {isSpectator ? (
-              <Eye size={12} />
+              <MonitorPlay size={12} />
             ) : myRole === "emperor" ? (
               <Crown size={12} />
             ) : (
               <Skull size={12} />
             )}
-            {isSpectator ? `觀戰: ${nickname}` : myName}
+            {isSpectator ? `你正在觀戰` : myName}
           </div>
           <button
             onClick={leaveRoom}
@@ -844,7 +917,9 @@ const EmperorGame = () => {
         <div className="w-full flex flex-col items-center gap-2 transition-all relative">
           <div className="flex items-center gap-2 opacity-60 bg-black/40 px-4 py-1 rounded-full border border-white/5 relative">
             {oppRole === "emperor" ? <Crown size={14} /> : <Skull size={14} />}
-            <span className="text-sm font-bold text-gray-300">{oppName}</span>
+            <span className="text-sm font-bold text-gray-300">
+              {oppName || "(等待加入...)"}
+            </span>
             <span className="text-xs font-bold tracking-widest uppercase ml-2 text-gray-500">
               剩餘 {oppHandLen} 張
             </span>
@@ -978,7 +1053,6 @@ const EmperorGame = () => {
                         />
                       ) : (
                         <Card
-                          // 🔥 關鍵修正：如果不在正式開牌動畫時間 (isShowdownMoment)，強制顯示 "C"
                           type={
                             isShowdownMoment
                               ? serverOppSel
@@ -986,8 +1060,6 @@ const EmperorGame = () => {
                                 : "C"
                               : "C"
                           }
-                          // 🔥 關鍵修正：只有在正式開牌動畫時間，才允許 isFaceDown = false
-                          // 其他時間一律蓋牌，確保安全
                           isFaceDown={!isShowdownMoment}
                           isLocked={oppHasCommitted && !serverOppSel}
                           isWinner={isReturn && !oppIsLoser}
@@ -1110,7 +1182,6 @@ const EmperorGame = () => {
       {gameState.status === "gameover" && (
         <div className="absolute inset-0 z-50 bg-black/90 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in duration-500">
           <div className="max-w-md w-full bg-[#151520] border border-white/10 rounded-3xl p-8 shadow-2xl text-center relative overflow-hidden">
-            {/* ...省略重複... */}
             <Trophy size={48} className="mx-auto mb-2 text-yellow-400" />
             <h2 className="text-4xl font-black text-white mb-2 uppercase">
               Game Over
